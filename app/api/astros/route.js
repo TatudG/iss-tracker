@@ -8,7 +8,14 @@ const UPSTREAM_TIMEOUT_MS = 5000;
 const CACHE_SECONDS = 3600;
 
 // Die Besatzung wechselt nur alle paar Monate - eine Stunde Cache reicht.
-export const revalidate = CACHE_SECONDS;
+// Next.js verlangt in Segment-Konfigurationen einen Literal-Wert (keine
+// Konstante), deshalb steht die Zahl hier bewusst doppelt.
+export const revalidate = 3600;
+
+// Bewusst dynamisch: sonst würde die Route schon beim Build einmal ausgeführt
+// und eine eventuelle Fehlerantwort für eine Stunde eingefroren. Der Cache
+// sitzt stattdessen am Upstream-Abruf (siehe `next.revalidate` unten).
+export const dynamic = "force-dynamic";
 
 function errorResponse(status, message) {
   return Response.json(
