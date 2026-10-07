@@ -76,6 +76,10 @@ eingefroren wird.
   Abruf räumt die Fehlermeldung weg.
 - **Nichts von `open-notify.org` direkt im Browser abrufen** - nur über
   `/api/astros`. Ein Mixed-Content-Fehler ist ein Akzeptanzkriterium des PRD.
+- **`npm run build` nicht bei laufendem `npm run dev` ausführen.** Beide nutzen
+  `.next`; der Build überschreibt dem Dev-Server die Artefakte, danach antwortet er
+  nur noch mit 500. Erst Dev stoppen, dann bauen - oder anschließend
+  `rm -rf .next && npm run dev` neu starten.
 
 ## Tests
 

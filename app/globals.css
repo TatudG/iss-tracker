@@ -382,6 +382,19 @@ body {
   font-size: 0.9rem;
 }
 
+/* Der Gast ist kein Besatzungsmitglied - das steht als Text dabei, nicht nur
+   als Farbunterschied. */
+.crew__guest {
+  margin-left: 0.4rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.crew__switch {
+  margin-top: 0.7rem;
+  font-size: 0.85rem;
+}
+
 /* ---------- Leaflet-Feinschliff ---------- */
 
 .leaflet-container {

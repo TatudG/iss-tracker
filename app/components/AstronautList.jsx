@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { crewCount, withGuest } from "../lib/crew";
 
 // Läuft unabhängig vom Positions-Polling: ein Fehler hier darf die Karte und
 // die Messwerte nicht beeinflussen.
@@ -16,6 +17,7 @@ export default function AstronautList() {
   const [people, setPeople] = useState([]);
   const [status, setStatus] = useState("loading");
   const [error, setError] = useState(null);
+  const [showGuest, setShowGuest] = useState(false);
 
   const load = useCallback(async () => {
     setStatus("loading");
@@ -45,6 +47,8 @@ export default function AstronautList() {
     load();
   }, [load]);
 
+  const shown = withGuest(people, showGuest);
+
   return (
     <section className="crew" aria-labelledby="crew-heading">
       <div className="crew__head">
@@ -60,24 +64,41 @@ export default function AstronautList() {
         </p>
       ) : null}
 
-      {status === "loading" && people.length === 0 ? (
+      {status === "loading" && shown.length === 0 ? (
         <p className="crew__hint">Besatzungsliste wird geladen …</p>
       ) : null}
 
-      {status !== "error" && people.length > 0 ? (
+      {status !== "error" && shown.length > 0 ? (
         <>
-          <p className="crew__count">{people.length} Personen an Bord</p>
+          <p className="crew__count">
+            {crewCount(people)} Personen an Bord
+            {showGuest ? " · 1 Gast" : ""}
+          </p>
           <ul className="crew__list">
-            {people.map((person) => (
-              <li key={person.name}>{person.name}</li>
+            {shown.map((person) => (
+              // Der Zusatz im Key unterscheidet den Gast von einer echten
+              // Person gleichen Namens.
+              <li key={`${person.name}-${person.guest ? "guest" : "crew"}`}>
+                {person.name}
+                {person.guest ? <span className="crew__guest">{" (Gast)"}</span> : null}
+              </li>
             ))}
           </ul>
         </>
       ) : null}
 
-      {status === "ready" && people.length === 0 ? (
+      {status === "ready" && shown.length === 0 ? (
         <p className="crew__hint">Zurzeit ist keine Besatzung gemeldet.</p>
       ) : null}
+
+      <label className="switch crew__switch">
+        <input
+          type="checkbox"
+          checked={showGuest}
+          onChange={(event) => setShowGuest(event.target.checked)}
+        />
+        <span>Gast anzeigen</span>
+      </label>
     </section>
   );
 }
