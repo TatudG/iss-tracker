@@ -395,6 +395,200 @@ body {
   font-size: 0.85rem;
 }
 
+/* ---------- Standort & Alarm ---------- */
+
+/* Im Auswahlmodus setzt der Klick den Standort - das Fadenkreuz macht das
+   sichtbar, bevor geklickt wird. */
+.leaflet-container.map--picking {
+  cursor: crosshair;
+}
+
+.standort {
+  margin-top: 1.1rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--border);
+}
+
+.standort h2 {
+  margin: 0 0 0.6rem;
+  font-size: 1rem;
+}
+
+.standort__label {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.standort__row {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 0.4rem;
+}
+
+.standort__row input[type="text"] {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.85rem;
+}
+
+.standort__row input[type="text"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.standort__submit,
+.standort__pick,
+.standort__notify {
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.standort__submit:hover:not(:disabled),
+.standort__pick:hover,
+.standort__notify:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.standort__submit:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+
+.standort__pick {
+  width: 100%;
+}
+
+.standort__pick[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: #eaf0ff;
+  color: var(--accent);
+}
+
+.standort__hint {
+  margin: 0.4rem 0 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.standort__hint--active {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.standort__error {
+  margin: 0.5rem 0 0;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--danger-border);
+  border-radius: 8px;
+  background: var(--danger-bg);
+  color: var(--danger-text);
+  font-size: 0.82rem;
+}
+
+.standort__results {
+  margin: 0.5rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.standort__result {
+  width: 100%;
+  padding: 0.35rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.8rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.standort__result:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.standort__current {
+  margin: 0.6rem 0 0.5rem;
+  font-size: 0.85rem;
+}
+
+.standort__select {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.standort__select select {
+  padding: 0.25rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.82rem;
+}
+
+.standort__notify {
+  margin-top: 0.6rem;
+}
+
+/* Alarmbanner: nutzt die Fehlerfarben, hebt sich aber durch den Rahmen und die
+   dezente Animation ab. Die Animation ist reine Verzierung - die Information
+   steht im Text. */
+.alert--alarm {
+  border-width: 2px;
+  border-color: var(--accent);
+  background: #eaf0ff;
+  color: #1b3a8f;
+  animation: alarm-pulse 1.6s ease-in-out 3;
+}
+
+.alert--alarm .alert__dismiss {
+  margin-top: 0.5rem;
+  padding: 0.25rem 0.7rem;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+@keyframes alarm-pulse {
+  50% {
+    border-color: #93b0f5;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .alert--alarm {
+    animation: none;
+  }
+}
+
 /* ---------- Leaflet-Feinschliff ---------- */
 
 .leaflet-container {

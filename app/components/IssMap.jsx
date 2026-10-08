@@ -18,6 +18,11 @@ const FOCUS_ZOOM = 4;
 const FOLLOW_DURATION_S = 0.6;
 
 const TRACK_STYLE = { color: "#1d4ed8", weight: 2, opacity: 0.7 };
+const USER_STYLE = { color: "#1d4ed8", weight: 1.5, fillOpacity: 0.08 };
+const USER_POINT_STYLE = { radius: 5, color: "#ffffff", weight: 2, fillColor: "#1d4ed8", fillOpacity: 1 };
+// Nach einem Verschieben feuern manche Browser noch ein Klick-Ereignis. Der
+// Klick wird deshalb kurz gesperrt, damit ein Ziehen keinen Standort setzt.
+const DRAG_CLICK_GUARD_MS = 200;
 
 function createIssIcon(L, visibility) {
   // Eigene Marker-Grafik als divIcon: umgeht die bekannte Icon-Pfad-Problematik
@@ -73,19 +78,51 @@ function applyTrack(L, group, track, showTrack) {
   }
 }
 
-export default function IssMap({ position, track = [], follow = true, showTrack = true, onUserDrag }) {
+// Standort des Nutzers samt Alarm-Radius. `interactive: false` an beiden
+// Objekten ist wichtig: sonst würden Kreis und Punkt die Klicks abfangen, mit
+// denen der Standort gesetzt wird.
+function applyUserLocation(L, group, userLocation, radiusKm) {
+  group.clearLayers();
+  if (!isValidPosition(userLocation)) return;
+
+  const center = [userLocation.latitude, userLocation.longitude];
+
+  if (Number.isFinite(radiusKm) && radiusKm > 0) {
+    // Leaflet rechnet den Radius in Metern.
+    L.circle(center, { ...USER_STYLE, radius: radiusKm * 1000, interactive: false }).addTo(group);
+  }
+
+  L.circleMarker(center, { ...USER_POINT_STYLE, interactive: false }).addTo(group);
+}
+
+export default function IssMap({
+  position,
+  track = [],
+  follow = true,
+  showTrack = true,
+  onUserDrag,
+  userLocation = null,
+  radiusKm = null,
+  onMapClick,
+  picking = false,
+}) {
   const containerRef = useRef(null);
   const leafletRef = useRef(null);
   const mapRef = useRef(null);
   const markerRef = useRef(null);
   const trackGroupRef = useRef(null);
+  const userGroupRef = useRef(null);
   const focusedRef = useRef(false);
   const iconStateRef = useRef("unknown");
+  const draggedRef = useRef(false);
   const followRef = useRef(follow);
   const showTrackRef = useRef(showTrack);
   const positionRef = useRef(position);
   const trackRef = useRef(track);
   const onUserDragRef = useRef(onUserDrag);
+  const userLocationRef = useRef(userLocation);
+  const radiusKmRef = useRef(radiusKm);
+  const onMapClickRef = useRef(onMapClick);
 
   // Neueste Werte vorhalten, damit die Karte sie direkt nach dem
   // (asynchronen) Aufbau anwenden kann.
@@ -94,10 +131,16 @@ export default function IssMap({ position, track = [], follow = true, showTrack 
   followRef.current = follow;
   showTrackRef.current = showTrack;
   onUserDragRef.current = onUserDrag;
+  userLocationRef.current = userLocation;
+  radiusKmRef.current = radiusKm;
+  onMapClickRef.current = onMapClick;
 
   useEffect(() => {
     let disposed = false;
     let handleDragStart = null;
+    let handleDragEnd = null;
+    let handleClick = null;
+    let dragResetTimer = null;
 
     (async () => {
       const L = (await import("leaflet")).default;
@@ -122,22 +165,43 @@ export default function IssMap({ position, track = [], follow = true, showTrack 
       }).addTo(map);
 
       const trackGroup = L.layerGroup().addTo(map);
+      const userGroup = L.layerGroup().addTo(map);
 
       // Verschiebt der Nutzer die Karte selbst, hat das Vorrang vor dem
       // Follow-Modus. panTo/setView lösen kein dragstart aus, deshalb kann
       // hier direkt auf die Nutzerabsicht geschlossen werden.
-      handleDragStart = () => onUserDragRef.current?.();
+      handleDragStart = () => {
+        draggedRef.current = true;
+        onUserDragRef.current?.();
+      };
       map.on("dragstart", handleDragStart);
+
+      handleDragEnd = () => {
+        dragResetTimer = setTimeout(() => {
+          draggedRef.current = false;
+        }, DRAG_CLICK_GUARD_MS);
+      };
+      map.on("dragend", handleDragEnd);
+
+      // Der Klick setzt nur den Standort - bewusst ohne onUserDrag, damit der
+      // Follow-Modus dabei unangetastet bleibt.
+      handleClick = (event) => {
+        if (draggedRef.current) return;
+        onMapClickRef.current?.(event.latlng);
+      };
+      map.on("click", handleClick);
 
       leafletRef.current = L;
       mapRef.current = map;
       markerRef.current = marker;
       trackGroupRef.current = trackGroup;
+      userGroupRef.current = userGroup;
       iconStateRef.current = visibilityState(positionRef.current?.visibility);
 
       // Falls die erste Antwort schon vor dem Kartenaufbau eingetroffen ist.
       applyPosition(map, marker, positionRef.current, focusedRef, followRef);
       applyTrack(L, trackGroup, trackRef.current, showTrackRef.current);
+      applyUserLocation(L, userGroup, userLocationRef.current, radiusKmRef.current);
 
       // Der Container kann beim Aufbau noch keine Höhe gehabt haben.
       map.invalidateSize();
@@ -145,16 +209,21 @@ export default function IssMap({ position, track = [], follow = true, showTrack 
 
     return () => {
       disposed = true;
+      clearTimeout(dragResetTimer);
       if (mapRef.current) {
         if (handleDragStart) mapRef.current.off("dragstart", handleDragStart);
+        if (handleDragEnd) mapRef.current.off("dragend", handleDragEnd);
+        if (handleClick) mapRef.current.off("click", handleClick);
         mapRef.current.remove();
         mapRef.current = null;
         markerRef.current = null;
         trackGroupRef.current = null;
+        userGroupRef.current = null;
       }
       leafletRef.current = null;
       focusedRef.current = false;
       iconStateRef.current = "unknown";
+      draggedRef.current = false;
     };
   }, []);
 
@@ -172,5 +241,17 @@ export default function IssMap({ position, track = [], follow = true, showTrack 
     applyTrack(L, trackGroupRef.current, track, showTrack);
   }, [track, showTrack]);
 
-  return <div className="map" ref={containerRef} aria-label="Weltkarte mit der ISS-Position" />;
+  useEffect(() => {
+    const L = leafletRef.current;
+    if (!L || !userGroupRef.current) return;
+    applyUserLocation(L, userGroupRef.current, userLocation, radiusKm);
+  }, [userLocation, radiusKm]);
+
+  return (
+    <div
+      className={picking ? "map map--picking" : "map"}
+      ref={containerRef}
+      aria-label="Weltkarte mit der ISS-Position"
+    />
+  );
 }

@@ -20,20 +20,48 @@ const h = vi.hoisted(() => {
   // darauf (`const marker = L.marker(...).addTo(map)`).
   const marker = { setLatLng: vi.fn(), setIcon: vi.fn() };
   marker.addTo = vi.fn(() => marker);
-  const group = { clearLayers: vi.fn() };
-  group.addTo = vi.fn(() => group);
+  const groups = [];
   const polyline = {};
   polyline.addTo = vi.fn(() => polyline);
+  const circle = {};
+  circle.addTo = vi.fn(() => circle);
+  const circleMarker = {};
+  circleMarker.addTo = vi.fn(() => circleMarker);
   const L = {
     map: vi.fn(() => map),
     tileLayer: vi.fn(() => ({ addTo: vi.fn() })),
     marker: vi.fn(() => marker),
     divIcon: vi.fn((options) => options),
-    layerGroup: vi.fn(() => group),
+    // Jede Ebene bekommt eine eigene Gruppe - wie bei Leaflet. `group` zeigt
+    // auf die erste (die Flugspur), damit die bestehenden Erwartungen halten.
+    layerGroup: vi.fn(() => {
+      const group = { clearLayers: vi.fn() };
+      group.addTo = vi.fn(() => group);
+      groups.push(group);
+      return group;
+    }),
     polyline: vi.fn(() => polyline),
+    circle: vi.fn(() => circle),
+    circleMarker: vi.fn(() => circleMarker),
   };
 
-  return { handlers, map, marker, group, polyline, L };
+  return {
+    handlers,
+    map,
+    marker,
+    polyline,
+    circle,
+    circleMarker,
+    groups,
+    // Erste Gruppe = Flugspur, zweite = Nutzerstandort.
+    get group() {
+      return groups[0];
+    },
+    get userGroup() {
+      return groups[1];
+    },
+    L,
+  };
 });
 
 vi.mock("leaflet", () => ({ default: h.L }));
@@ -49,6 +77,7 @@ async function mount(props = {}) {
 describe("IssMap", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    h.groups.length = 0;
     for (const event of Object.keys(h.handlers)) delete h.handlers[event];
   });
 
@@ -191,12 +220,96 @@ describe("IssMap", () => {
     expect(h.L.polyline).not.toHaveBeenCalled();
   });
 
+  it("zeichnet den Nutzerstandort samt Radius-Kreis", async () => {
+    const { rerender } = await mount({ position: position(10, 20) });
+
+    await act(async () => {
+      rerender(
+        <IssMap position={position(10, 20)} userLocation={{ latitude: 52.52, longitude: 13.405 }} radiusKm={250} />,
+      );
+    });
+
+    expect(h.L.circle).toHaveBeenCalledTimes(1);
+    // Leaflet erwartet den Radius in Metern, nicht in Kilometern.
+    expect(h.L.circle.mock.calls[0][1]).toEqual(
+      expect.objectContaining({ radius: 250000, interactive: false }),
+    );
+    expect(h.L.circleMarker).toHaveBeenCalledWith(
+      [52.52, 13.405],
+      expect.objectContaining({ interactive: false }),
+    );
+    expect(h.circle.addTo).toHaveBeenCalledWith(h.userGroup);
+  });
+
+  it("zeichnet den Kreis bei geändertem Radius neu und räumt den alten weg", async () => {
+    const { rerender } = await mount({ position: position(10, 20) });
+    const userLocation = { latitude: 52.52, longitude: 13.405 };
+
+    await act(async () => {
+      rerender(<IssMap position={position(10, 20)} userLocation={userLocation} radiusKm={250} />);
+    });
+    await act(async () => {
+      rerender(<IssMap position={position(10, 20)} userLocation={userLocation} radiusKm={500} />);
+    });
+
+    expect(h.L.circle).toHaveBeenCalledTimes(2);
+    expect(h.userGroup.clearLayers).toHaveBeenCalled();
+    expect(h.L.circle.mock.calls[1][1].radius).toBe(500000);
+  });
+
+  it("zeichnet nichts, solange kein Standort gesetzt ist", async () => {
+    await mount({ position: position(10, 20) });
+
+    expect(h.L.circle).not.toHaveBeenCalled();
+    expect(h.L.circleMarker).not.toHaveBeenCalled();
+  });
+
+  it("meldet dem Elternteil einen Klick auf die Karte mit den Koordinaten", async () => {
+    const onMapClick = vi.fn();
+    await mount({ position: position(10, 20), onMapClick });
+
+    expect(typeof h.handlers.click).toBe("function");
+
+    act(() => {
+      h.handlers.click({ latlng: { lat: 52.52, lng: 13.405 } });
+    });
+
+    expect(onMapClick).toHaveBeenCalledWith({ lat: 52.52, lng: 13.405 });
+  });
+
+  it("lässt den Follow-Modus bei einem Kartenklick unangetastet", async () => {
+    const onUserDrag = vi.fn();
+    const onMapClick = vi.fn();
+    await mount({ position: position(10, 20), onUserDrag, onMapClick });
+
+    act(() => {
+      h.handlers.click({ latlng: { lat: 52.52, lng: 13.405 } });
+    });
+
+    expect(onMapClick).toHaveBeenCalledTimes(1);
+    expect(onUserDrag).not.toHaveBeenCalled();
+  });
+
+  it("setzt nach einem Verschieben keinen Standort durch den Folgeklick", async () => {
+    const onMapClick = vi.fn();
+    await mount({ position: position(10, 20), onMapClick });
+
+    act(() => {
+      h.handlers.dragstart();
+      h.handlers.click({ latlng: { lat: 52.52, lng: 13.405 } });
+    });
+
+    expect(onMapClick).not.toHaveBeenCalled();
+  });
+
   it("räumt Karte und Event-Listener beim Unmount auf", async () => {
     const { unmount } = await mount({ position: position(10, 20) });
 
     unmount();
 
     expect(h.map.off).toHaveBeenCalledWith("dragstart", expect.any(Function));
+    expect(h.map.off).toHaveBeenCalledWith("dragend", expect.any(Function));
+    expect(h.map.off).toHaveBeenCalledWith("click", expect.any(Function));
     expect(h.map.remove).toHaveBeenCalled();
   });
 });
